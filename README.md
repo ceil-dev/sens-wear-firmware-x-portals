@@ -75,6 +75,7 @@ the drivers that need them):
 | Library | Where | Enabled when |
 | --- | --- | --- |
 | BHY2 Sensor API (Bosch, vendored) | `libs/BHY2-Sensor-API/` | `CONFIG_SENSWEAR_BHI360_DRIVER` (the IMU driver uses it) |
+| Portals (ceil.dev, vendored) | `libs/portals/` | `CONFIG_SENSWEAR_PORTALS` (used by the [portals service](src/bluetooth/services/portals/README.md)) |
 | Zephyr subsystems | `prj.conf` | BLE (`CONFIG_BT`), LittleFS over disk-access on the M95P (`CONFIG_FILE_SYSTEM_LITTLEFS`, `CONFIG_DISK_ACCESS`, `CONFIG_SENSWEAR_M95P_DISK`), POSIX file API (`CONFIG_POSIX_API`), logging/shell |
 
 Vendored libraries are aggregated into the `libs` interface target by
@@ -122,6 +123,11 @@ service reports compiled shield and supported feature masks so clients can
 disable unsupported sensor/actuator pages. These masks describe the firmware
 configuration, not physical daughter-board detection. See the
 [metadata wire format and hardware validation procedure](src/bluetooth/services/device_info/README.md).
+
+With `CONFIG_SENSWEAR_PORTALS`, on in `prj.conf`, the firmware also registers the
+portals service: an app that speaks portals enters the env `senswear` and reads or
+sets the device's properties. See the
+[portals wire format and hardware validation procedure](src/bluetooth/services/portals/README.md).
 
 ## Storage and filesystem
 

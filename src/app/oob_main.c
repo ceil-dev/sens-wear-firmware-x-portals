@@ -10,7 +10,7 @@
  * every present device, publish configuration, start the publisher — and
  * starts the enabled BLE services on top of it:
  *
- *   - imu / power / body_temperature: their zbus listeners are registered
+ *   - imu / power / body_temperature / portals: their zbus listeners are registered
  *     here once the producing device reported ready.
  *   - ppg / touch: their services expose explicit registration/configuration
  *     APIs and do not create their own threads.
@@ -62,6 +62,10 @@
 
 #if defined(CONFIG_SENSWEAR_DAUGHTER_HAPTIC)
 #include "bluetooth/services/haptic/haptic_lbs.h"
+#endif
+
+#if defined(CONFIG_SENSWEAR_PORTALS)
+#include "bluetooth/services/portals/portals_lbs.h"
 #endif
 
 LOG_MODULE_REGISTER(SENSE_WEAR_OOB_MAIN_LOGGER);
@@ -377,6 +381,16 @@ static void oob_start_services(void) {
 			LOG_WRN("power_lbs_register_streams() failed: %d", ret);
 		}
 	}
+
+#if defined(CONFIG_SENSWEAR_PORTALS)
+	if (battery_configured) {
+		int ret = portals_lbs_register_streams();
+
+		if (ret != 0) {
+			LOG_WRN("portals_lbs_register_streams() failed: %d", ret);
+		}
+	}
+#endif
 
 #if defined(CONFIG_SHIELD_SENSWEAR_TEMPERATURE)
 	if (temperature_configured) {

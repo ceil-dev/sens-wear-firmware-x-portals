@@ -168,6 +168,9 @@ structure, for example `drivers/<subsystem>/CMakeLists.txt`, under this module.
 Vendored dependencies are stored under `libs/`. `libs/libs.cmake` aggregates
 their interface targets into the `libs` target. The BHY2 sensor API is currently
 integrated through `libs/bhy2-sensors.cmake`.
+The portals libraries, joined into `portals.h` and `portals.c`, are in
+`libs/portals/`, outside the `libs` target: only the portals service links
+them, when `CONFIG_SENSWEAR_PORTALS` is on.
 
 ## Driver bring-up tests
 

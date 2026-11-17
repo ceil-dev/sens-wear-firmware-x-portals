@@ -43,6 +43,13 @@ target_include_directories(ble_services INTERFACE
     ${CMAKE_SOURCE_DIR}/boards/common/device_manager
 )
 
+# Portals: the device's properties as one env. The service is the only user
+# of the portals libraries (libs/portals) and links them.
+if(CONFIG_SENSWEAR_PORTALS)
+    add_ble_service_dir(portals)
+    target_link_libraries(ble_services INTERFACE portals)
+endif()
+
 # Daughter-board services, selected by the active SENSWEAR_DAUGHTER_* choice.
 if(CONFIG_SENSWEAR_DAUGHTER_HAPTIC)
     add_ble_service_dir(haptic)

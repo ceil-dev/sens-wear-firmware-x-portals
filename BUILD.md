@@ -129,6 +129,18 @@ driver that needs it is enabled. Today that is the BHY2 sensor API, pulled in
 when `CONFIG_SENSWEAR_BHI360_DRIVER` is set. `libs` is always linked into `app`
 (and into `app_src`) because the IMU driver uses BHY2 by default.
 
+### Portals service
+
+| Symbol | Builds | Depends on |
+| --- | --- | --- |
+| `CONFIG_SENSWEAR_PORTALS` | `src/bluetooth/services/portals/`, `libs/portals/` | `BT_PERIPHERAL`, `SENSWEAR_DEVICE_MANAGER` |
+
+`prj.conf` turns it on. `libs/libs.cmake` and `src/bluetooth/services/services.cmake`
+build the two folders only with it, and only the service links the libraries, so
+the bring-up tests carry none of it; with it off, the image is the firmware without
+portals. The build stops if `CONFIG_BT_MAX_CONN` reaches 8. On the base preset,
+portals costs about 13.5 KB of flash and 17.9 KB of RAM.
+
 ## What each shield enables
 
 Each shield is a Zephyr shield under `boards/shields/senswear_<name>/` with

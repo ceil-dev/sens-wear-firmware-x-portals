@@ -240,6 +240,15 @@ config SENSWEAR_DEVICE_MANAGER
 	  isolated device or shield bring-up tests, which replace the application and
 	  do not need the manager.
 
+config SENSWEAR_PORTALS
+	bool "Portals: the device's properties as one env over Bluetooth LE"
+	depends on BT_PERIPHERAL
+	depends on SENSWEAR_DEVICE_MANAGER
+	help
+	  Enable the portals service (src/bluetooth/services/portals) and the
+	  libraries it uses (libs/portals). An app that speaks portals reads the
+	  device's properties through it and sets some of them.
+
 # Driver bring-up tests (tests/drivers). All off by default. Enabling exactly
 # one replaces the application main() with the selected test main(); see
 # tests/drivers/tests.cmake. These are Kconfig symbols (not CMake options) so

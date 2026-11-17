@@ -17,3 +17,9 @@ if(CONFIG_SENSWEAR_BHI360_DRIVER)
         bhy2_sensors
     )
 endif()
+
+# The portals libraries. The portals service (src/bluetooth/services/portals)
+# is their only user and links them, so the bring-up tests do not carry them.
+if(CONFIG_SENSWEAR_PORTALS)
+    include(${CMAKE_CURRENT_LIST_DIR}/portals/portals.cmake)
+endif()
