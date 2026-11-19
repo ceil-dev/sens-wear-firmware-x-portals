@@ -19,10 +19,10 @@
 
 LOG_MODULE_REGISTER(SENSE_WEAR_PORTALS_BLUETOOTH_LOGGER);
 
-// The stack holds the largest answer, which portal_persistence_call keeps on it, and the calls
-// around it: a property's function runs here with the device manager and the driver it calls,
-// and with CONFIG_LOG_MODE_IMMEDIATE a log line is printed by the thread that logs it.
-#define PORTALS_LBS_THREAD_STACK_SIZE (PORTAL_PERSISTENCE_ROOM + 3072)
+// The stack holds the calls of the thread: a property's function runs here with the device manager
+// and the driver it calls, and with CONFIG_LOG_MODE_IMMEDIATE a log line is printed by the thread
+// that logs it.
+#define PORTALS_LBS_THREAD_STACK_SIZE 3072
 #define PORTALS_LBS_THREAD_PRIORITY 7
 #define PORTALS_LBS_IMU_PERIOD_MS 100 // until one is set here: the same as imu_lbs.c's
 
@@ -31,6 +31,8 @@ static atomic_t battery_charge_dpct;
 static atomic_t battery_voltage_mv;
 
 // ───────────────────────────────── the properties ─────────────────────────────
+// An object that needs a driver or the shield is a row of the env between #if and #endif, in the
+// array of rows below: it is there only when that is built.
 
 static const char* read_firmware(void) {
 	return APP_VERSION_EXTENDED_STRING;
@@ -75,13 +77,6 @@ static bool write_led_color(const char* text, size_t length) {
 	led_color = rgb;
 	return true;
 }
-
-static const persistence_property led[] = {
-	{.key = "color",
-	 .description = "its color as #rrggbb; #000000 is off",
-	 .read_string = read_led_color,
-	 .write_string = write_led_color},
-};
 #endif
 
 #if defined(CONFIG_SENSWEAR_BQ27427_DRIVER)
@@ -94,17 +89,6 @@ static int32_t read_battery_level(void) {
 static int32_t read_battery_voltage(void) {
 	return (int32_t) atomic_get(&battery_voltage_mv);
 }
-
-static const persistence_property battery[] = {
-	{.key = "level",
-	 .unit = "%",
-	 .description = "how full it is",
-	 .read_number = read_battery_level},
-	{.key = "voltage",
-	 .unit = "mV",
-	 .description = "its voltage",
-	 .read_number = read_battery_voltage},
-};
 #endif
 
 #if defined(CONFIG_SENSWEAR_BHI360_DRIVER)
@@ -140,134 +124,135 @@ static bool write_imu_period(int32_t ms) {
 	imu_period_ms = ms;
 	return true;
 }
-
-static const persistence_property imu[] = {
-	{.key = "streams",
-	 .description = "whether it sends its readings",
-	 .read_boolean = read_imu_streams,
-	 .write_boolean = write_imu_streams},
-	{.key = "period",
-	 .unit = "ms",
-	 .description = "how often its readings are collected",
-	 .read_number = read_imu_period,
-	 .write_number = write_imu_period},
-};
 #endif
 
 #if defined(CONFIG_SHIELD_SENSWEAR_HAPTIC)
 // Takes { amplitude, duration }. A duration goes up to 65535 ms, as in the haptic service: the
 // device manager turns it into microseconds in 32 bits, which hold no more than 4,294,967 ms.
-static bool vibrate(const persistence_value* takes, persistence_value* gives) {
+static persistence_value vibrate(const persistence_value* takes) {
 	int32_t amplitude = takes[0].number;
 	int32_t duration_ms = takes[1].number;
 	if (amplitude < 0 || amplitude > 255 || duration_ms < 1 || duration_ms > UINT16_MAX) {
-		gives->string = "it takes an amplitude from 0 to 255 and a duration from 1 to 65535 ms";
-	} else if (device_manager_haptic_vibrate((uint8_t) amplitude, (uint32_t) duration_ms) < 0) {
-		gives->string = "the motor did not start";
+		return persistence_error(
+				.reason = "it takes an amplitude from 0 to 255 and a duration from 1 to 65535 ms");
 	}
-	return !gives->string;
+	if (device_manager_haptic_vibrate((uint8_t) amplitude, (uint32_t) duration_ms) < 0) {
+		return persistence_error(.reason = "the motor did not start");
+	}
+	return persistence_nothing;
 }
 
-static bool stop(const persistence_value* takes, persistence_value* gives) {
+static persistence_value stop(const persistence_value* takes) {
 	ARG_UNUSED(takes);
-	if (device_manager_haptic_stop() >= 0) {
-		return true;
+	if (device_manager_haptic_stop() < 0) {
+		return persistence_error(.reason = "the motor did not stop");
 	}
-	gives->string = "the motor did not stop";
-	return false;
+	return persistence_nothing;
 }
-
-static const persistence_property vibration[] = {
-	{.key = "amplitude", .type = "number", .description = "how strong, from 0 to 255"},
-	{.key = "duration", .type = "number", .unit = "ms", .description = "how long, from 1 to 65535"},
-};
-static const persistence_property vibrate_takes = {.type = "object",
-												   .children = vibration,
-												   .count = ARRAY_SIZE(vibration)};
-static const persistence_property haptic[] = {
-	{.key = "vibrate", .description = "vibrates once", .call = vibrate, .input = &vibrate_takes},
-	{.key = "stop", .description = "stops it", .call = stop},
-	{.key = "active",
-	 .description = "whether it vibrates now",
-	 .read_boolean = device_manager_haptic_is_active},
-};
 #endif
 
-static const persistence_property properties[] = {
-	{.key = "firmware", .description = "the firmware's version", .read_string = read_firmware},
+static const persistence_row* const senswear_rows[] = {
+	PERSISTENCE_STRING(.key = "firmware",
+					   .description = "the firmware's version",
+					   .get = read_firmware),
 #if defined(CONFIG_SENSWEAR_LP5562_DRIVER)
-	{.key = "led",
-	 .description = "the light on the main board",
-	 .children = led,
-	 .count = ARRAY_SIZE(led)},
+	PERSISTENCE_OBJECT(.key = "led",
+					   .description = "the light on the main board",
+					   PERSISTENCE_ROWS(
+						   PERSISTENCE_STRING(.key = "color",
+											  .description = "its color as #rrggbb; #000000 is off",
+											  .writable = true,
+											  .get = read_led_color,
+											  .set = write_led_color))),
 #endif
 #if defined(CONFIG_SENSWEAR_BQ27427_DRIVER)
-	{.key = "battery",
-	 .description = "the battery",
-	 .children = battery,
-	 .count = ARRAY_SIZE(battery)},
+	PERSISTENCE_OBJECT(.key = "battery",
+					   .description = "the battery",
+					   PERSISTENCE_ROWS(PERSISTENCE_NUMBER(.key = "level",
+														   .unit = "%",
+														   .description = "how full it is",
+														   .get = read_battery_level),
+										PERSISTENCE_NUMBER(.key = "voltage",
+														   .unit = "mV",
+														   .description = "its voltage",
+														   .get = read_battery_voltage))),
 #endif
 #if defined(CONFIG_SENSWEAR_BHI360_DRIVER)
-	{.key = "imu", .description = "the motion sensor", .children = imu, .count = ARRAY_SIZE(imu)},
+	PERSISTENCE_OBJECT(
+			.key = "imu",
+			.description = "the motion sensor",
+			PERSISTENCE_ROWS(PERSISTENCE_BOOLEAN(.key = "streams",
+												 .description = "whether it sends its readings",
+												 .writable = true,
+												 .get = read_imu_streams,
+												 .set = write_imu_streams),
+							 PERSISTENCE_NUMBER(.key = "period",
+												.unit = "ms",
+												.description =
+													"how often its readings are collected",
+												.writable = true,
+												.get = read_imu_period,
+												.set = write_imu_period))),
 #endif
 #if defined(CONFIG_SHIELD_SENSWEAR_HAPTIC)
-	{.key = "haptic",
-	 .description = "the vibration motor",
-	 .children = haptic,
-	 .count = ARRAY_SIZE(haptic)},
+	PERSISTENCE_OBJECT(
+			.key = "haptic",
+			.description = "the vibration motor",
+			PERSISTENCE_ROWS(
+				PERSISTENCE_FUNCTION(
+						.key = "vibrate",
+						.description = "vibrates once",
+						.call = vibrate,
+						.input = PERSISTENCE_OBJECT(
+							PERSISTENCE_ROWS(PERSISTENCE_NUMBER(.key = "amplitude",
+																.description =
+																	"how strong, from 0 to 255"),
+											 PERSISTENCE_NUMBER(.key = "duration",
+																.unit = "ms",
+																.description =
+																	"how long, from 1 to 65535")))),
+				PERSISTENCE_FUNCTION(.key = "stop", .description = "stops it", .call = stop),
+				PERSISTENCE_BOOLEAN(.key = "active",
+									.description = "whether it vibrates now",
+									.get = device_manager_haptic_is_active))),
 #endif
 };
-static const persistence_env senswear = {properties, ARRAY_SIZE(properties)};
+
+PERSISTENCE_ENV_FROM(senswear, senswear_rows);
 
 // ───────────────────────────────── the env and the core ───────────────────────
 
-static void handle(const portal_event* event, portals_core* m) {
-	static const portal_bytes none = {NULL, 0};
+// What happens besides the calls, which the core answers with the env's actions.
+static void handle(const portal_event* event, portals_core* core) {
+	ARG_UNUSED(core);
 	if (event->type == PORTAL_OPEN) {
 		LOG_INF("a visitor came in");
 	} else if (event->type == PORTAL_CLOSE) {
 		LOG_INF("a visitor left");
-	} else if (event->type == PORTAL_CALL && !portal_persistence_call(m, &senswear, event)) {
-		portal_reply(m, &event->ref, PORTAL_UNKNOWN, none);
 	}
 }
 
 // Anyone in range may enter: the Bluetooth LE ether vouches for nobody.
-static bool anyone(const portal_event* call, portals_core* m) {
-	ARG_UNUSED(call);
-	ARG_UNUSED(m);
-	return true;
-}
-
-static const portal_api api = {ETHER_MEMBERS,
-							   .allow = anyone,
-							   .random = ether_ble_zephyr_random,
-							   PORTAL_CBOR,
-							   PORTAL_OPERATIONS};
+static const portal_api api = ETHER_API(portal_anyone, ether_ble_zephyr_random);
 // Its table is set when the thread starts. Set here, the whole core, 6 KB of zeros, would be
 // stored in flash as well.
 static portals_core core;
 
 static void portals_lbs_thread(void* p1, void* p2, void* p3) {
-	static uint8_t about[80]; // what @describe answers, packed
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
-	if (!portal_complete(&api)) {
+	ether* e = ether_ble_zephyr();
+	if (!ether_plug(e, &core, &api)) {
 		LOG_ERR("a member of the core's table is not set");
 		return;
 	}
-	ether* e = ether_ble_zephyr();
-	core.api = &api;
-	ether_plug(e, &core, handle);
-	if (!portal_persistence_expose(&core, "senswear", "a SensWear device", about, sizeof about)) {
+	ether_on_event(e, handle);
+	if (!portal_expose(&core, "senswear", "a SensWear device", persistence_actions, &senswear)) {
 		LOG_ERR("the env senswear was not exposed");
 	}
 	for (;;) {
-		if (!e->poll(e, 1000)) {
-			portal_repeat(&core); // a second of silence: what is not confirmed is said again
-		}
-		portal_flush(&core);
+		ether_step(e, 1000); // a second of silence: what is not confirmed is said again
 	}
 }
 

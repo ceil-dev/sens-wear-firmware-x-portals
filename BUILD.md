@@ -139,7 +139,7 @@ when `CONFIG_SENSWEAR_BHI360_DRIVER` is set. `libs` is always linked into `app`
 build the two folders only with it, and only the service links the libraries, so
 the bring-up tests carry none of it; with it off, the image is the firmware without
 portals. The build stops if `CONFIG_BT_MAX_CONN` reaches 8. On the base preset,
-portals costs about 13.5 KB of flash and 17.9 KB of RAM.
+portals costs about 13.9 KB of flash and 16.3 KB of RAM.
 
 ## What each shield enables
 
